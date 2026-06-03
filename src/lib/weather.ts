@@ -30,6 +30,13 @@ export type CurrentWeather = {
   time: string;
 };
 
+export type HourlyPoint = {
+  time: string;
+  temperature: number;
+  weatherCode: number;
+  precipitationProbability: number;
+};
+
 export type DailyForecast = {
   date: string;
   weatherCode: number;
@@ -40,6 +47,7 @@ export type DailyForecast = {
 
 export type WeatherResponse = {
   current: CurrentWeather;
+  hourly: HourlyPoint[];
   daily: DailyForecast[];
   units: {
     temperature: string;
@@ -76,6 +84,10 @@ export async function getWeather(
     "temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,is_day",
   );
   url.searchParams.set(
+    "hourly",
+    "temperature_2m,weather_code,precipitation_probability",
+  );
+  url.searchParams.set(
     "daily",
     "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
   );
@@ -96,6 +108,13 @@ export async function getWeather(
     time: data.current.time,
   };
 
+  const hourly: HourlyPoint[] = data.hourly.time.map((time: string, i: number) => ({
+    time,
+    temperature: data.hourly.temperature_2m[i],
+    weatherCode: data.hourly.weather_code[i],
+    precipitationProbability: data.hourly.precipitation_probability?.[i] ?? 0,
+  }));
+
   const daily: DailyForecast[] = data.daily.time.map((date: string, i: number) => ({
     date,
     weatherCode: data.daily.weather_code[i],
@@ -106,6 +125,7 @@ export async function getWeather(
 
   return {
     current,
+    hourly,
     daily,
     units: {
       temperature: data.current_units.temperature_2m,
@@ -158,4 +178,30 @@ export function describeWeatherCode(
   };
 
   return map[code] ?? { label: "Unknown", emoji: "❓" };
+}
+
+/**
+ * Classify a WMO weather code into a broad visual "scene" — used by the
+ * animated overlay to decide which particle effect to render.
+ */
+export type WeatherScene =
+  | "clear-day"
+  | "clear-night"
+  | "cloudy"
+  | "fog"
+  | "drizzle"
+  | "rain"
+  | "heavy-rain"
+  | "snow"
+  | "thunder";
+
+export function classifyScene(code: number, isDay: boolean): WeatherScene {
+  if ([95, 96, 99].includes(code)) return "thunder";
+  if ([45, 48].includes(code)) return "fog";
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return "snow";
+  if ([82, 65, 67].includes(code)) return "heavy-rain";
+  if ([61, 63, 80, 81, 66].includes(code)) return "rain";
+  if ([51, 53, 55, 56, 57].includes(code)) return "drizzle";
+  if ([2, 3].includes(code)) return "cloudy";
+  return isDay ? "clear-day" : "clear-night";
 }

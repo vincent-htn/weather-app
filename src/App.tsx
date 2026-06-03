@@ -2,7 +2,14 @@ import { useEffect, useState } from "react";
 import { SearchBar } from "./components/SearchBar";
 import { CurrentWeather } from "./components/CurrentWeather";
 import { Forecast } from "./components/Forecast";
-import { getWeather, type GeoResult, type WeatherResponse } from "./lib/weather";
+import { HourlyForecast } from "./components/HourlyForecast";
+import { WeatherEffects } from "./components/WeatherEffects";
+import {
+  classifyScene,
+  getWeather,
+  type GeoResult,
+  type WeatherResponse,
+} from "./lib/weather";
 
 const DEFAULT_CITY: GeoResult = {
   id: 658225,
@@ -40,22 +47,35 @@ function App() {
     };
   }, [city]);
 
-  // Background gradient changes between day/night for a bit of polish.
+  // Live page title — small delight: tab shows current temp and city.
+  useEffect(() => {
+    if (weather) {
+      document.title = `${Math.round(weather.current.temperature)}${weather.units.temperature} · ${city.name}`;
+    } else {
+      document.title = "Weather";
+    }
+  }, [weather, city]);
+
   const isDay = weather?.current.isDay ?? true;
-  const bgClass = isDay
-    ? "bg-gradient-to-br from-sky-400 via-indigo-500 to-purple-600"
-    : "bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-900";
+  const scene = weather
+    ? classifyScene(weather.current.weatherCode, isDay)
+    : "clear-day";
+
+  // Background gradient driven by scene (not just day/night) — rainy days
+  // get a moodier sky, clear nights get a deep cosmic tone, etc.
+  const bgClass = sceneToBackground(scene);
 
   return (
-    <div className={`min-h-screen ${bgClass} transition-colors duration-700`}>
-      <div className="mx-auto max-w-3xl px-4 py-10 sm:py-16 flex flex-col gap-8">
+    <div
+      className={`relative min-h-screen ${bgClass} transition-colors duration-700`}
+    >
+      <WeatherEffects scene={scene} />
+
+      <div className="relative z-10 mx-auto max-w-3xl px-4 py-10 sm:py-16 flex flex-col gap-8">
         <header className="text-center">
           <h1 className="text-3xl sm:text-4xl font-semibold text-white tracking-tight">
             Weather
           </h1>
-          <p className="text-white/70 mt-1">
-            Powered by Open-Meteo · No API key required
-          </p>
         </header>
 
         <div className="flex justify-center">
@@ -75,16 +95,43 @@ function App() {
         {weather && (
           <>
             <CurrentWeather city={city} current={weather.current} units={weather.units} />
+            <HourlyForecast
+              hourly={weather.hourly}
+              currentTime={weather.current.time}
+              units={weather.units}
+            />
             <Forecast daily={weather.daily} units={weather.units} />
           </>
         )}
-
-        <footer className="text-center text-white/50 text-xs mt-auto pt-6">
-          Built with Vite · React · Tailwind
-        </footer>
       </div>
     </div>
   );
+}
+
+function sceneToBackground(
+  scene: ReturnType<typeof classifyScene>,
+): string {
+  switch (scene) {
+    case "clear-day":
+      return "bg-gradient-to-br from-sky-400 via-indigo-500 to-purple-600";
+    case "clear-night":
+      return "bg-gradient-to-br from-slate-900 via-indigo-950 to-violet-950";
+    case "cloudy":
+      return "bg-gradient-to-br from-slate-500 via-slate-600 to-slate-800";
+    case "fog":
+      return "bg-gradient-to-br from-slate-400 via-slate-500 to-slate-700";
+    case "drizzle":
+    case "rain":
+      return "bg-gradient-to-br from-slate-600 via-slate-700 to-blue-900";
+    case "heavy-rain":
+      return "bg-gradient-to-br from-slate-700 via-slate-900 to-blue-950";
+    case "thunder":
+      return "bg-gradient-to-br from-slate-800 via-indigo-950 to-black";
+    case "snow":
+      return "bg-gradient-to-br from-slate-300 via-slate-400 to-indigo-400";
+    default:
+      return "bg-gradient-to-br from-sky-400 via-indigo-500 to-purple-600";
+  }
 }
 
 export default App;
